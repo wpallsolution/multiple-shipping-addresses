@@ -1,0 +1,20 @@
+<?php
+/**
+ * Uninstall Plugin
+ */
+
+if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
+    exit;
+}
+
+hplugin_uninstall_plugin();
+
+/**
+ * Cleanup database on uninstall
+ */
+function hplugin_uninstall_plugin() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'hplugin_addresses';
+    // Drop the custom table
+    $wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}hplugin_addresses" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+}

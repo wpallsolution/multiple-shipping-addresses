@@ -1,0 +1,230 @@
+jQuery(document).ready(function($) {
+    
+    // Open Modal
+    $('#hplugin-add-new-btn').on('click', function(e) {
+        e.preventDefault();
+        $('#hplugin-address-form')[0].reset();
+        $('#hplugin_address_id').val('');
+        $('#hplugin-form-title').text('Add New Address');
+        
+        // Reset dynamic fields
+        $('#hplugin_country').trigger('change'); 
+
+        $('#hplugin-address-form-modal').fadeIn();
+    });
+
+    // Close Modal
+    $('.hplugin-close, .hplugin-cancel-btn').on('click', function() {
+        $('#hplugin-address-form-modal').fadeOut();
+    });
+
+    // Click outside modal
+    $(window).on('click', function(e) {
+        if ($(e.target).is('#hplugin-address-form-modal')) {
+            $('#hplugin-address-form-modal').fadeOut();
+        }
+    });
+
+    // Save Address
+    $('#hplugin-address-form').on('submit', function(e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $btn = $form.find('button[type="submit"]');
+        var originalText = $btn.text();
+
+        $btn.text(hplugin_vars.messages.saving).prop('disabled', true);
+
+        // Serialize Form
+        var data = $form.serialize();
+        data += '&action=hplugin_save_address&nonce=' + hplugin_vars.nonce;
+
+        $.post(hplugin_vars.ajax_url, data, function(response) {
+            if (response.success) {
+                alert(response.data.message);
+                location.reload(); 
+            } else {
+                alert(response.data.message || hplugin_vars.messages.error);
+                $btn.text(originalText).prop('disabled', false);
+            }
+        }).fail(function() {
+            alert(hplugin_vars.messages.error);
+            $btn.text(originalText).prop('disabled', false);
+        });
+    });
+
+    // Edit Address
+    $('.hplugin-edit-btn').on('click', function() {
+        var id = $(this).data('id');
+        
+        // Fetch address data
+        $.post(hplugin_vars.ajax_url, {
+            action: 'hplugin_get_address',
+            nonce: hplugin_vars.nonce,
+            id: id
+        }, function(response) {
+            if (response.success) {
+                var addr = response.data;
+                $('#hplugin_address_id').val(addr.id);
+                $('#hplugin_address_name').val(addr.address_name);
+                $('#hplugin_first_name').val(addr.first_name);
+                $('#hplugin_last_name').val(addr.last_name);
+                $('#hplugin_company').val(addr.company);
+                $('#hplugin_address_label').val(addr.address_label);
+                $('#hplugin_country').val(addr.country).trigger('change');
+                
+                // Helper to set state after country change logic
+                var setState = function() {
+                     var states = hplugin_vars.states[addr.country];
+                     if (states && !$.isEmptyObject(states)) {
+                          $('#hplugin_state').val(addr.state);
+                     } else {
+                          $('#hplugin_state_input').val(addr.state);
+                     }
+                };
+                
+                setState();
+                
+                $('#hplugin_city').val(addr.city);
+                $('#hplugin_address_1').val(addr.address_1);
+                $('#hplugin_address_2').val(addr.address_2);
+                $('#hplugin_postcode').val(addr.postcode);
+                $('#hplugin_phone').val(addr.phone);
+                $('#hplugin_email').val(addr.email);
+                $('#hplugin_is_default').prop('checked', addr.is_default == "1");
+
+                $('#hplugin-form-title').text('Edit Address');
+                $('#hplugin-address-form-modal').fadeIn();
+            } else {
+                alert(hplugin_vars.messages.error);
+            }
+        });
+    });
+
+    // Delete Address
+    $('.hplugin-delete-btn').on('click', function() {
+        if (!confirm(hplugin_vars.messages.confirm_delete)) return;
+        var id = $(this).data('id');
+        $.post(hplugin_vars.ajax_url, {
+            action: 'hplugin_delete_address',
+            nonce: hplugin_vars.nonce,
+            id: id
+        }, function(response) {
+            if (response.success) {
+                location.reload();
+            } else {
+                alert(response.data.message);
+            }
+        });
+    });
+
+    // Set Default
+    $('.hplugin-default-btn').on('click', function() {
+        var id = $(this).data('id');
+        $.post(hplugin_vars.ajax_url, {
+            action: 'hplugin_set_default_address',
+            nonce: hplugin_vars.nonce,
+            id: id
+        }, function(response) {
+            if (response.success) {
+                location.reload();
+            }
+        });
+    });
+
+    // Checkout Integrated Logic
+    // Checkout Integrated Logic
+    if ($('form.checkout').length > 0) {
+        
+        // Handle Radio Change
+        $('body').on('change', 'input[name="hplugin_address_selection"]', function() {
+            var $this = $(this);
+            var address_id = $this.val();
+            
+            // Visual feedback
+            $('.hplugin-address-option').removeClass('selected');
+            $this.closest('.hplugin-address-option').addClass('selected');
+
+            if (address_id === '0' || !address_id) {
+                // Clear Shipping Fields
+                $('#shipping_first_name').val('').trigger('change');
+                $('#shipping_last_name').val('').trigger('change');
+                $('#shipping_company').val('').trigger('change');
+                $('#shipping_address_1').val('').trigger('change');
+                $('#shipping_address_2').val('').trigger('change');
+                $('#shipping_city').val('').trigger('change');
+                $('#shipping_postcode').val('').trigger('change');
+                $('#shipping_country').val('').trigger('change');
+                
+                // Reset state
+                $(document.body).trigger('update_checkout');
+                return;
+            }
+
+            var addr = $this.data('address');
+            
+            // Safe Parsing if returned as string
+            if (typeof addr === 'string') {
+                try {
+                    addr = JSON.parse(addr);
+                } catch (e) {
+                    console.error('HPlugin: Invalid address data', e);
+                    return;
+                }
+            }
+
+            if (addr) {
+                // Show loading
+                $('form.checkout').addClass('processing');
+
+                // Ensure "Ship to different address" is checked
+                if (!$('#ship-to-different-address-checkbox').is(':checked')) {
+                    $('#ship-to-different-address-checkbox').prop('checked', true).trigger('change');
+                }
+
+                $('#shipping_first_name').val(addr.first_name);
+                $('#shipping_last_name').val(addr.last_name);
+                $('#shipping_company').val(addr.company);
+                $('#shipping_address_1').val(addr.address_1);
+                $('#shipping_address_2').val(addr.address_2);
+                $('#shipping_city').val(addr.city);
+                $('#shipping_postcode').val(addr.postcode);
+
+                // Handle Country & State
+                $('#shipping_country').val(addr.country).trigger('change');
+                
+                // We listen for the country change event or just wait briefly if handled synchronously
+                // Best practice: Set state after small delay to allow country change to process
+                setTimeout(function() {
+                    $('#shipping_state').val(addr.state).trigger('change');
+                    $('form.checkout').removeClass('processing');
+                    $(document.body).trigger('update_checkout');
+                }, 500); 
+            }
+        });
+    }
+
+
+
+    // Dynamic Country/State Logic in Modal
+    $('#hplugin_country').on('change', function() {
+        var country = $(this).val();
+        var $state_select = $('#hplugin_state');
+        var $state_input = $('#hplugin_state_input');
+        
+        var states = hplugin_vars.states[country];
+        
+        if (states && !$.isEmptyObject(states)) {
+            $state_select.empty();
+            $state_select.append('<option value="">' + hplugin_vars.messages.select_option + '</option>');
+            $.each(states, function(code, name) {
+                $state_select.append('<option value="'+code+'">'+name+'</option>');
+            });
+            $state_select.show().prop('required', true);
+            $state_input.hide().prop('required', false).val('');
+        } else {
+            $state_select.hide().prop('required', false);
+            $state_input.show().prop('required', true);
+        }
+    });
+
+});

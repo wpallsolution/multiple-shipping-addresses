@@ -1,0 +1,269 @@
+<?php
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class HPlugin_Settings
+{
+    private $option_name = 'hplugin_settings';
+
+    public function __construct()
+    {
+        add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_init', array($this, 'register_settings'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+    }
+
+    /**
+     * Add Top-Level Menu
+     */
+    public function add_admin_menu()
+    {
+        add_menu_page(
+            __('Multiple Shipping Addresses', 'h-shipping-multiple-addresses-for-woocommerce'),
+            __('Multiple Shipping Addresses', 'h-shipping-multiple-addresses-for-woocommerce'),
+            'manage_options',
+            'hplugin-settings',
+            array($this, 'render_settings_page'),
+            'dashicons-location-alt',
+            56
+        );
+    }
+
+    /**
+     * Enqueue Admin Scripts/Styles (if needed for future)
+     */
+    public function enqueue_admin_scripts($hook)
+    {
+        if ($hook != 'toplevel_page_hplugin-settings') {
+            return;
+        }
+        // wp_enqueue_style(...)
+    }
+
+    /**
+     * Register Settings & Sections
+     */
+    public function register_settings()
+    {
+        register_setting(
+            $this->option_name,
+            $this->option_name,
+            array($this, 'sanitize_settings')
+        );
+
+        // --- Section 1: General Settings ---
+        add_settings_section(
+            'hplugin_general_section',
+            __('General Settings', 'h-shipping-multiple-addresses-for-woocommerce'),
+            array($this, 'render_section_general'),
+            'hplugin-settings'
+        );
+
+        add_settings_field(
+            'enable_plugin',
+            __('Enable Plugin', 'h-shipping-multiple-addresses-for-woocommerce'),
+            array($this, 'render_checkbox_field'),
+            'hplugin-settings',
+            'hplugin_general_section',
+            array(
+                'id' => 'enable_plugin',
+                'description' => __('Enable or disable the multiple shipping addresses functionality.', 'h-shipping-multiple-addresses-for-woocommerce')
+            )
+        );
+
+        add_settings_field(
+            'max_addresses',
+            __('Max Shipping Addresses', 'h-shipping-multiple-addresses-for-woocommerce'),
+            array($this, 'render_number_field'),
+            'hplugin-settings',
+            'hplugin_general_section',
+            array(
+                'id' => 'max_addresses',
+                'default' => 3,
+                'min' => 1,
+                'max' => 3,
+                'description' => __('Maximum number of addresses a user can save (Limited to 3).', 'h-shipping-multiple-addresses-for-woocommerce')
+            )
+        );
+
+        add_settings_field(
+            'enable_labels',
+            __('Enable Address Labels', 'h-shipping-multiple-addresses-for-woocommerce'),
+            array($this, 'render_checkbox_field'),
+            'hplugin-settings',
+            'hplugin_general_section',
+            array(
+                'id' => 'enable_labels',
+                'description' => __('Allow users to tag addresses (e.g., Home, Office).', 'h-shipping-multiple-addresses-for-woocommerce')
+            )
+        );
+
+        // --- Section 2: Checkout Behavior ---
+        add_settings_section(
+            'hplugin_checkout_section',
+            __('Checkout Behavior', 'h-shipping-multiple-addresses-for-woocommerce'),
+            array($this, 'render_section_checkout'),
+            'hplugin-settings'
+        );
+
+        add_settings_field(
+            'allow_multiple_checkout',
+            __('Multiple Address Selection', 'h-shipping-multiple-addresses-for-woocommerce'),
+            array($this, 'render_checkbox_field'),
+            'hplugin-settings',
+            'hplugin_checkout_section',
+            array(
+                'id' => 'allow_multiple_checkout',
+                'description' => __('Allow selecting addresses during checkout.', 'h-shipping-multiple-addresses-for-woocommerce')
+            )
+        );
+
+        add_settings_field(
+            'validate_duplicates',
+            __('Validate Duplicates', 'h-shipping-multiple-addresses-for-woocommerce'),
+            array($this, 'render_checkbox_field'),
+            'hplugin-settings',
+            'hplugin_checkout_section',
+            array(
+                'id' => 'validate_duplicates',
+                'description' => __('Prevent users from saving duplicate addresses.', 'h-shipping-multiple-addresses-for-woocommerce')
+            )
+        );
+
+
+
+        // --- Section 3: Premium Features (Removed for now) ---
+
+    }
+
+    /**
+     * Sanitize Settings
+     */
+    public function sanitize_settings($input)
+    {
+        $sanitized = array();
+        if (isset($input['enable_plugin']))
+            $sanitized['enable_plugin'] = '1';
+        if (isset($input['max_addresses'])) {
+            // Strict enforcement: User cannot save more than 3
+            $sanitized['max_addresses'] = min(3, absint($input['max_addresses']));
+        }
+        if (isset($input['enable_labels']))
+            $sanitized['enable_labels'] = '1';
+
+        if (isset($input['allow_multiple_checkout']))
+            $sanitized['allow_multiple_checkout'] = '1';
+        if (isset($input['validate_duplicates']))
+            $sanitized['validate_duplicates'] = '1';
+
+
+        return $sanitized;
+    }
+
+    /**
+     * Render Section Callbacks
+     */
+    public function render_section_general()
+    {
+        echo '<p>' . esc_html__('Configure the general options for the address book.', 'h-shipping-multiple-addresses-for-woocommerce') . '</p>';
+    }
+
+    public function render_section_checkout()
+    {
+        echo '<p>' . esc_html__('Control how the address selection behaves on the checkout page.', 'h-shipping-multiple-addresses-for-woocommerce') . '</p>';
+    }
+
+    public function render_section_premium()
+    {
+        echo '<div class="notice notice-info inline"><p>';
+        echo '<strong>' . esc_html__('Upgrade to Premium!', 'h-shipping-multiple-addresses-for-woocommerce') . '</strong> ';
+        echo esc_html__('Unlock powerful features like unlimited addresses, advanced shipping rules, and priority support.', 'h-shipping-multiple-addresses-for-woocommerce');
+        echo '</p></div>';
+    }
+
+    /**
+     * Render Field Callbacks
+     */
+    public function render_checkbox_field($args)
+    {
+        $options = get_option($this->option_name);
+        if (!is_array($options)) {
+            $options = array();
+        }
+        $value = isset($options[$args['id']]) ? $options[$args['id']] : '';
+        ?>
+        <input type="checkbox" name="<?php echo esc_attr($this->option_name . '[' . $args['id'] . ']'); ?>" value="1" <?php checked($value, 1); ?>>
+        <?php if (!empty($args['description'])): ?>
+            <p class="description">
+                <?php echo esc_html($args['description']); ?>
+            </p>
+        <?php endif;
+    }
+
+    public function render_number_field($args)
+    {
+        $options = get_option($this->option_name);
+        if (!is_array($options)) {
+            $options = array();
+        }
+        $value = isset($options[$args['id']]) ? $options[$args['id']] : $args['default'];
+        $min = isset($args['min']) ? $args['min'] : 0;
+        $max = isset($args['max']) ? $args['max'] : 100;
+        ?>
+        <input type="number" name="<?php echo esc_attr($this->option_name . '[' . $args['id'] . ']'); ?>"
+            value="<?php echo esc_attr($value); ?>" min="<?php echo esc_attr($min); ?>" max="<?php echo esc_attr($max); ?>"
+            class="small-text" <?php echo ($args['id'] === 'max_addresses') ? 'max="3"' : ''; ?>>
+        <?php if (!empty($args['description'])): ?>
+            <p class="description">
+                <?php echo esc_html($args['description']); ?>
+            </p>
+        <?php endif;
+    }
+
+    public function render_premium_field($args)
+    {
+        ?>
+        <input type="checkbox" disabled="disabled">
+        <span class="description" style="color: #666; font-style: italic;">
+            <?php echo esc_html($args['description']); ?>
+        </span>
+        <?php
+    }
+
+    /**
+     * Render Settings Page
+     */
+    public function render_settings_page()
+    {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+        ?>
+        <div class="wrap">
+            <h1>
+                <?php echo esc_html(get_admin_page_title()); ?>
+            </h1>
+            <?php settings_errors(); ?>
+            <style>
+                .hplugin-premium-badge {
+                    background: #d63638;
+                    color: #fff;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 10px;
+                    vertical-align: text-top;
+                    margin-left: 5px;
+                }
+            </style>
+            <form action="options.php" method="post">
+                <?php
+                settings_fields($this->option_name);
+                do_settings_sections('hplugin-settings');
+                submit_button();
+                ?>
+            </form>
+        </div>
+        <?php
+    }
+}
